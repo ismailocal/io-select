@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IO Select Examples</title>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="../dist/io-select.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .demo-section {
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+        }
+        .demo-section h2 {
+            margin-bottom: 1rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        .code-block {
+            background: #f8fafc;
+            padding: 1rem;
+            border-radius: 0.375rem;
+            margin: 1rem 0;
+            font-family: monospace;
+        }
+        .output-json {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            background: #1e293b;
+            color: #e2e8f0;
+            border-radius: 0.375rem;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold mb-8 text-gray-900 dark:text-white">IO Select Examples</h1>
+
+        <!-- Basic Usage -->
+        <div class="demo-section bg-white dark:bg-gray-800 shadow">
+            <h2 class="text-gray-900 dark:text-white">Basic Usage</h2>
+            <div class="mb-4">
+                <select id="basicSelect" class="w-full">
+                    <option value=""></option>
+                    <option value="1">Istanbul</option>
+                    <option value="2">London</option>
+                    <option value="3">New York</option>
+                    <option value="4">Paris</option>
+                    <option value="5">Tokyo</option>
+                </select>
+            </div>
+            <div class="code-block dark:bg-gray-700 dark:text-gray-300">
+                <pre>$('#basicSelect').ioSelect();</pre>
+            </div>
+            <div class="output-json">
+                <strong>Selected Value:</strong>
+                <pre id="basicSelectOutput">null</pre>
+            </div>
+        </div>
+
+        <!-- Multiple Selection -->
+        <div class="demo-section bg-white dark:bg-gray-800 shadow">
+            <h2 class="text-gray-900 dark:text-white">Multiple Selection</h2>
+            <div class="mb-4">
+                <select id="multiSelect" multiple class="w-full">
+                    <option value="red">Red</option>
+                    <option value="blue">Blue</option>
+                    <option value="green">Green</option>
+                    <option value="yellow">Yellow</option>
+                    <option value="purple">Purple</option>
+                    <option value="orange">Orange</option>
+                </select>
+            </div>
+            <div class="code-block dark:bg-gray-700 dark:text-gray-300">
+                <pre>$('#multiSelect').ioSelect({
+    placeholder: 'Select colors',
+    searchPlaceholder: 'Search colors...'
+});</pre>
+            </div>
+            <div class="output-json">
+                <strong>Selected Values:</strong>
+                <pre id="multiSelectOutput">[]</pre>
+            </div>
+        </div>
+
+        <!-- Customized -->
+        <div class="demo-section bg-white dark:bg-gray-800 shadow">
+            <h2 class="text-gray-900 dark:text-white">Customized</h2>
+            <div class="mb-4">
+                <select id="customSelect" class="w-full">
+                    <option value=""></option>
+                    <option value="us">United States</option>
+                    <option value="gb">United Kingdom</option>
+                    <option value="de">Germany</option>
+                    <option value="fr">France</option>
+                    <option value="it">Italy</option>
+                    <option value="es">Spain</option>
+                    <option value="pt">Portugal</option>
+                    <option value="gr">Greece</option>
+                    <option value="jp">Japan</option>
+                    <option value="kr">South Korea</option>
+                </select>
+            </div>
+            <div class="code-block dark:bg-gray-700 dark:text-gray-300">
+                <pre>$('#customSelect').ioSelect({
+    placeholder: 'Select country',
+    searchPlaceholder: 'Search country...',
+    noResultsText: 'No country found'
+});</pre>
+            </div>
+            <div class="output-json">
+                <strong>Selected Value:</strong>
+                <pre id="customSelectOutput">null</pre>
+            </div>
+        </div>
+
+        <!-- Search Disabled -->
+        <div class="demo-section bg-white dark:bg-gray-800 shadow">
+            <h2 class="text-gray-900 dark:text-white">Search Disabled</h2>
+            <div class="mb-4">
+                <select id="noSearchSelect" class="w-full">
+                    <option value=""></option>
+                    <option value="1">January</option>
+                    <option value="2">February</option>
+                    <option value="3">March</option>
+                    <option value="4">April</option>
+                    <option value="5">May</option>
+                    <option value="6">June</option>
+                </select>
+            </div>
+            <div class="code-block dark:bg-gray-700 dark:text-gray-300">
+                <pre>$('#noSearchSelect').ioSelect({
+    searchable: false,
+    placeholder: 'Select month'
+});</pre>
+            </div>
+            <div class="output-json">
+                <strong>Selected Value:</strong>
+                <pre id="noSearchSelectOutput">null</pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            // Show selected values as JSON
+            function updateOutput(selectId, outputId) {
+                const $select = $(selectId);
+                const selectedOptions = Array.from($select.find('option:selected')).map(option => ({
+                    value: option.value,
+                    text: option.text
+                }));
+
+                const output = $select.prop('multiple') ? selectedOptions : (selectedOptions[0] || null);
+                $(outputId).text(JSON.stringify(output, null, 2));
+            }
+
+            // Basic usage
+            $('#basicSelect').ioSelect().on('change', function() {
+                updateOutput('#basicSelect', '#basicSelectOutput');
+            });
+
+            // Multiple selection
+            $('#multiSelect').ioSelect({
+                placeholder: 'Select colors',
+                searchPlaceholder: 'Search colors...'
+            }).on('change', function() {
+                updateOutput('#multiSelect', '#multiSelectOutput');
+            });
+
+            // Customized
+            $('#customSelect').ioSelect({
+                placeholder: 'Select country',
+                searchPlaceholder: 'Search country...',
+                noResultsText: 'No country found'
+            }).on('change', function() {
+                updateOutput('#customSelect', '#customSelectOutput');
+            });
+
+            // Search disabled
+            $('#noSearchSelect').ioSelect({
+                searchable: false,
+                placeholder: 'Select month'
+            }).on('change', function() {
+                updateOutput('#noSearchSelect', '#noSearchSelectOutput');
+            });
+        });
+    </script>
+</body>
+</html> 

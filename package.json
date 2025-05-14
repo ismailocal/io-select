@@ -1,0 +1,42 @@
+{
+    "name": "io-select",
+    "version": "1.0.0",
+    "description": "A modern and customizable select plugin for jQuery",
+    "main": "dist/io-select.js",
+    "scripts": {
+        "build": "webpack --mode production",
+        "dev": "webpack --mode development --watch",
+        "test": "jest"
+    },
+    "keywords": [
+        "jquery-plugin",
+        "select",
+        "multiple",
+        "single",
+        "search",
+        "dropdown",
+        "form",
+        "ui"
+    ],
+    "author": "İsmail Öcal",
+    "email": "ismailocal@gmail.com",
+    "homepage": "https://github.com/ismailocal/io-select",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/ismailocal/io-select.git"
+    },
+    "license": "MIT",
+    "dependencies": {
+        "jquery": ">=1.7.0"
+    },
+    "devDependencies": {
+        "@babel/core": "^7.24.0",
+        "@babel/preset-env": "^7.24.0",
+        "babel-loader": "^9.1.3",
+        "webpack": "^5.90.3",
+        "webpack-cli": "^5.1.4"
+    },
+    "peerDependencies": {
+        "jquery": ">=1.7.0"
+    }
+}
