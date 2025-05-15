@@ -2,6 +2,10 @@
 
 A modern and customizable jQuery select plugin. Styled with Tailwind CSS, featuring search functionality and multiple selection support.
 
+## Demo
+
+Check out the live demo here: [https://ismailocal.github.io/io-select/examples/index.html](https://ismailocal.github.io/io-select/examples/index.html)
+
 ## Features
 
 - 🎨 Modern and responsive design
