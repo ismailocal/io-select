@@ -239,27 +239,40 @@ const IOSelect = (function () {
                     'id': `io-select-option-${$select.attr('id')}-${item.id}`
                 });
 
-                const $checkbox = $('<input>').attr({
-                    type: 'checkbox',
-                    class: 'mr-2',
-                    'aria-hidden': 'true' // Hide for screen readers, option role is already present
-                });
+                let $checkbox = null; // Initialize $checkbox to null
+                if (isMultiple) { // Check if isMultiple is true
+                    $checkbox = $('<input>').attr({ // Create checkbox only if isMultiple is true
+                        type: 'checkbox',
+                        class: 'mr-2',
+                        'aria-hidden': 'true' // Hide for screen readers, option role is already present
+                    });
 
-                // Check checkbox status
-                const isSelected = $select.find(`option[value="${item.id}"]`).prop('selected');
-                $checkbox.prop('checked', isSelected);
-                $option.attr('aria-selected', isSelected.toString());
+                    // Check checkbox status
+                    const isSelected = $select.find(`option[value="${item.id}"]`).prop('selected');
+                    $checkbox.prop('checked', isSelected);
+                    $option.attr('aria-selected', isSelected.toString());
+
+                    $option.append($checkbox); // Append checkbox only if isMultiple is true
+                } else {
+                    // For single select, still need to set aria-selected based on the actual select option
+                    const isSelected = $select.find(`option[value="${item.id}"]`).prop('selected');
+                    $option.attr('aria-selected', isSelected.toString());
+                }
+
 
                 const $text = $('<span>').text(item.name);
-
-                $option.append($checkbox).append($text);
+                $option.append($text); // Append text regardless of isMultiple
 
                 $option.on('click', function () {
                     toggleItem(item.id);
-                    // Update checkbox status
-                    const newSelected = $select.find(`option[value="${item.id}"]`).prop('selected');
-                    $checkbox.prop('checked', newSelected);
-                    $option.attr('aria-selected', newSelected.toString());
+                    // Update checkbox status only if isMultiple is true
+                    if (isMultiple && $checkbox) {
+                        const newSelected = $select.find(`option[value="${item.id}"]`).prop('selected');
+                        $checkbox.prop('checked', newSelected);
+                    }
+                    // Always update aria-selected for the option itself
+                    const newSelectedState = $select.find(`option[value="${item.id}"]`).prop('selected');
+                    $option.attr('aria-selected', newSelectedState.toString());
                 });
 
                 return $option;
