@@ -143,6 +143,43 @@
                 <pre id="noSearchSelectOutput">null</pre>
             </div>
         </div>
+
+        <!-- Virtual Scrolling Test -->
+        <div class="demo-section bg-white dark:bg-gray-800 shadow">
+            <h2 class="text-gray-900 dark:text-white">Virtual Scrolling Test</h2>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                These examples demonstrate virtual scrolling with a large number of options.
+            </p>
+            <div class="mb-4">
+                <label for="virtualSelect" class="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Virtual Scroll Enabled (2000 options):</label>
+                <select id="virtualSelect" class="w-full"></select>
+            </div>
+            <div class="code-block dark:bg-gray-700 dark:text-gray-300">
+                <pre>$('#virtualSelect').ioSelect({ placeholder: 'Select from 2000 options' });</pre>
+            </div>
+             <div class="output-json">
+                <strong>Selected Value:</strong>
+                <pre id="virtualSelectOutput">null</pre>
+            </div>
+
+            <hr class="my-6 border-gray-300 dark:border-gray-600">
+
+            <div class="mb-4">
+                <label for="virtualSelectDisabled" class="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Virtual Scroll Disabled (2000 options):</label>
+                <select id="virtualSelectDisabled" class="w-full"></select>
+            </div>
+            <div class="code-block dark:bg-gray-700 dark:text-gray-300">
+                <pre>$('#virtualSelectDisabled').ioSelect({
+    placeholder: 'Select (virtual scroll OFF)',
+    virtualScroll: false
+});</pre>
+            </div>
+            <div class="output-json">
+                <strong>Selected Value:</strong>
+                <pre id="virtualSelectDisabledOutput">null</pre>
+            </div>
+        </div>
+
     </div>
 
     <script>
@@ -188,6 +225,27 @@
             }).on('change', function() {
                 updateOutput('#noSearchSelect', '#noSearchSelectOutput');
             });
+
+            // Virtual Scroll Test
+            const $virtualSelect = $('#virtualSelect');
+            const $virtualSelectDisabled = $('#virtualSelectDisabled');
+            for (let i = 1; i <= 2000; i++) {
+                const option = new Option(`Option ${i}`, `val${i}`);
+                $virtualSelect.append(option.cloneNode(true));
+                $virtualSelectDisabled.append(option);
+            }
+
+            $virtualSelect.ioSelect({ placeholder: 'Select from 2000 options' }).on('change', function() {
+                updateOutput('#virtualSelect', '#virtualSelectOutput');
+            });
+
+            $virtualSelectDisabled.ioSelect({
+                placeholder: 'Select (virtual scroll OFF)',
+                virtualScroll: false
+            }).on('change', function() {
+                updateOutput('#virtualSelectDisabled', '#virtualSelectDisabledOutput');
+            });
+
         });
     </script>
 </body>
