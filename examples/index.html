@@ -180,9 +180,116 @@
             </div>
         </div>
 
+        <!-- AJAX Data Loading -->
+        <div class="demo-section bg-white dark:bg-gray-800 shadow">
+            <h2 class="text-gray-900 dark:text-white">AJAX Data Loading</h2>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                These examples use a client-side mock of <code>$.ajax</code> to simulate server interactions.
+                Open your browser's console to see mock AJAX call logs.
+            </p>
+
+            <div class="mb-4">
+                <label for="ajaxSelect" class="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">AJAX with Search (Min search length 0):</label>
+                <select id="ajaxSelect" class="w-full"></select>
+            </div>
+            <div class="code-block dark:bg-gray-700 dark:text-gray-300">
+                <pre>$('#ajaxSelect').ioSelect({
+    placeholder: 'Search remote data (AJAX)...',
+    ajax: {
+        url: '/api/options/mock',
+        delay: 400,
+        triggerMinSearchTermLength: 0
+    }
+});</pre>
+            </div>
+            <div class="output-json">
+                <strong>Selected Value:</strong>
+                <pre id="ajaxSelectOutput">null</pre>
+            </div>
+
+            <hr class="my-6 border-gray-300 dark:border-gray-600">
+
+            <div class="mb-4">
+                <label for="ajaxSelectWithInitial" class="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">AJAX with Pre-selected Values (Min search length 1):</label>
+                <select id="ajaxSelectWithInitial" class="w-full">
+                    <option value="5" selected>Should be Item 5 (resolved)</option>
+                    <option value="15" selected>Should be Item 15 (resolved)</option>
+                    <option value="1001" selected>Non-existent ID</option> <!-- This won't be resolved by mock -->
+                </select>
+            </div>
+            <div class="code-block dark:bg-gray-700 dark:text-gray-300">
+                <pre>$('#ajaxSelectWithInitial').ioSelect({
+    placeholder: 'AJAX with Pre-selected Values...',
+    ajax: {
+        url: '/api/options/mock',
+        initialValueUrl: '/api/options/initial-mock',
+        delay: 400,
+        triggerMinSearchTermLength: 1
+    }
+});</pre>
+            </div>
+            <div class="output-json">
+                <strong>Selected Values:</strong>
+                <pre id="ajaxSelectWithInitialOutput">[]</pre> <!-- Note: This example could be multiple if desired -->
+            </div>
+        </div>
+
     </div>
 
     <script>
+        // Mock AJAX Setup
+        const mockServerData = Array.from({length: 50}, (_, i) => ({
+            id: (i + 1).toString(), // Ensure IDs are strings like typical option values
+            name: `Mock Item ${i + 1}` + ( (i + 1) % 10 === 0 ? ' (Special Suffix)' : '')
+        }));
+
+        const originalJQueryAjax = $.ajax;
+        $.ajax = function(ajaxSettings) { // Renamed 'settings' to 'ajaxSettings' to avoid conflict
+            if (ajaxSettings.url === '/api/options/mock' || ajaxSettings.url === '/api/options/initial-mock') {
+                console.log('Mock AJAX call intercepted:', ajaxSettings.url, ajaxSettings.data);
+
+                const page = ajaxSettings.data.page || 1;
+                const term = (ajaxSettings.data.term || '').toLowerCase();
+                const idsToResolve = ajaxSettings.data.ids ? (Array.isArray(ajaxSettings.data.ids) ? ajaxSettings.data.ids : ajaxSettings.data.ids.split(',')) : null;
+
+
+                let itemsToProcess = [...mockServerData];
+
+                if (ajaxSettings.url === '/api/options/initial-mock' && idsToResolve) {
+                    itemsToProcess = mockServerData.filter(item => idsToResolve.includes(item.id.toString()));
+                    console.log('Mock initialValueUrl resolving to:', itemsToProcess);
+                    setTimeout(() => {
+                        // processResults expects {results: [...]}, so wrap it
+                        ajaxSettings.success({ results: itemsToProcess });
+                    }, 200);
+                    return { abort: function() { console.log('Mock AJAX aborted'); } }; // Return a mock XHR object
+                }
+
+                if (term) {
+                    itemsToProcess = itemsToProcess.filter(item => item.name.toLowerCase().includes(term));
+                }
+
+                const pageSize = 10;
+                const startIndex = (page - 1) * pageSize;
+                const endIndex = startIndex + pageSize;
+                const pageItems = itemsToProcess.slice(startIndex, endIndex);
+                const hasMore = itemsToProcess.length > endIndex;
+
+                console.log(`Mock server: term='${term}', page=${page}, returning ${pageItems.length} items, hasMore=${hasMore}`);
+
+                setTimeout(() => {
+                    ajaxSettings.success({
+                        results: pageItems,
+                        pagination: { more: hasMore }
+                    });
+                }, ajaxSettings.delay || 500); // Use configured delay from plugin or default
+                 return { abort: function() { console.log('Mock AJAX aborted'); } }; // Return a mock XHR object
+            } else {
+                console.warn('Passing through unmocked AJAX call to:', ajaxSettings.url);
+                return originalJQueryAjax.apply(this, arguments);
+            }
+        };
+
         $(document).ready(function() {
             // Show selected values as JSON
             function updateOutput(selectId, outputId) {
@@ -245,6 +352,30 @@
             }).on('change', function() {
                 updateOutput('#virtualSelectDisabled', '#virtualSelectDisabledOutput');
             });
+
+            // AJAX Examples
+            $('#ajaxSelect').ioSelect({
+                placeholder: 'Search remote data (AJAX)...',
+                ajax: {
+                    url: '/api/options/mock', // Mocked URL
+                    delay: 400,
+                    triggerMinSearchTermLength: 0, // Load first page on open if search term is empty
+                    processResults: function(data, params) {
+                        console.log('Processing AJAX results for term:', params.term, 'page:', params.page, data);
+                        return data; // Default mock response is already in correct format
+                    }
+                }
+            }).on('change', function() { updateOutput('#ajaxSelect', '#ajaxSelectOutput'); });
+
+            $('#ajaxSelectWithInitial').ioSelect({
+                placeholder: 'AJAX with Pre-selected Values...',
+                ajax: {
+                    url: '/api/options/mock',
+                    initialValueUrl: '/api/options/initial-mock',
+                    delay: 400,
+                    triggerMinSearchTermLength: 1
+                }
+            }).on('change', function() { updateOutput('#ajaxSelectWithInitial', '#ajaxSelectWithInitialOutput'); });
 
         });
     </script>

@@ -55,23 +55,75 @@ const IOSelect = (function () {
             searchable: true,
             virtualScroll: true,
             optionHeight: 36,       // Default height of an option item in pixels
-            virtualScrollBuffer: 5  // Number of options to render above/below visible area
+            virtualScrollBuffer: 5,  // Number of options to render above/below visible area
+            ajax: {
+                url: null,
+                method: 'GET',
+                dataType: 'json',
+                delay: 300,
+                data: function(params) {
+                    // Remove undefined params to keep URL clean
+                    let query = {};
+                    if (params.term) query.term = params.term;
+                    if (params.page) query.page = params.page; // For pagination
+                    return query;
+                },
+                processResults: function(data, params) {
+                    // Assumes data is an array of {id: '', name: ''} objects
+                    // Or an object like { items: [], total_count: X } for pagination
+                    // For basic cases, if data is an array, just return it.
+                    // For more complex server responses, user MUST override this.
+                    if (Array.isArray(data)) {
+                        return { results: data }; // No pagination assumed
+                    } else if (data && Array.isArray(data.results)) {
+                        // Expects {results: [], pagination: {more: boolean}}
+                        return data;
+                    }
+                    return { results: [] }; // Default fallback
+                },
+                triggerMinSearchTermLength: 1,
+                pageParam: 'page', // Parameter name for page number if pagination is used
+                initialValueUrl: null // URL to fetch display text for pre-selected values by ID
+            }
         };
 
-        // Merge user settings with defaults
-        const settings = $.extend({}, defaults, options);
+        // Merge user settings with defaults - true for deep merge
+        const settings = $.extend(true, {}, defaults, options);
 
         // Process each select element
         return this.each(function () {
             const $select = $(this);
             const isMultiple = $select.prop('multiple');
-            let currentFilteredOptions = []; // Holds the currently filtered list of options
 
-            // Get all options
-            const allOptions = Array.from($select.find('option')).map(option => ({
-                id: option.value,
-                name: option.text
-            })).filter(option => option.id !== ''); // Filter empty option
+            const isAjaxMode = settings.ajax && settings.ajax.url ? true : false;
+            let ajaxCurrentPage = 1;
+            let ajaxIsLoading = false;
+            let ajaxCurrentSearchTerm = '';
+            let ajaxHasMorePages = true; // Assume more pages until told otherwise
+            let ajaxDebounceTimeout = null; // For debouncing search input
+
+            let allOptions = []; // Initialize as empty
+            if (isAjaxMode) {
+                // In AJAX mode, allOptions will be populated by AJAX responses.
+                // Pre-selected options text may need to be handled by initialValueUrl or if data is in the <select>
+                $select.find('option:selected').each(function() {
+                    const val = $(this).val();
+                    const text = $(this).text();
+                    if (val) { // only add if value is not empty
+                        // Note: 'selected: true' is implicit as we are iterating :selected
+                        // but we can add it if it helps other parts of the logic distinguish these.
+                        allOptions.push({ id: val, name: text, selected: true });
+                    }
+                });
+            } else {
+                // Original logic for non-AJAX mode
+                allOptions = Array.from($select.find('option')).map(option => ({
+                    id: option.value,
+                    name: option.text
+                })).filter(option => option.id !== ''); // Filter empty option
+            }
+
+            let currentFilteredOptions = [...allOptions]; // Holds the currently filtered list of options, start with pre-selected AJAX items
 
             // Create main container
             const $container = $('<div>').addClass('io-select-container relative');
@@ -132,8 +184,34 @@ const IOSelect = (function () {
 
                 // Search functionality
                 $searchInput.on('keyup', function () {
-                    const searchTerm = $(this).val().toLowerCase();
-                    filterOptions(searchTerm);
+                    if (isAjaxMode) {
+                        const currentSearchVal = $(this).val(); // Keep original case for server
+                        clearTimeout(ajaxDebounceTimeout);
+
+                        if (currentSearchVal.length === 0 && settings.ajax.triggerMinSearchTermLength === 0) {
+                            ajaxDebounceTimeout = setTimeout(() => {
+                                fetchAjaxOptions('', 1, true);
+                            }, settings.ajax.delay);
+                        } else if (currentSearchVal.length >= settings.ajax.triggerMinSearchTermLength) {
+                            ajaxDebounceTimeout = setTimeout(() => {
+                                fetchAjaxOptions(currentSearchVal, 1, true);
+                            }, settings.ajax.delay);
+                        } else {
+                            // Term is too short, or cleared and minLength > 0
+                            currentFilteredOptions = [];
+                            // allOptions = []; // Don't clear allOptions if it holds pre-selected resolved items
+                            if (settings.virtualScroll && $optionsSizer) {
+                                $optionsSizer.height(0);
+                                renderVisibleOptions(); // Will show 'no results' or empty
+                            } else if (!settings.virtualScroll) {
+                                renderAllOptions(); // Will show 'no results' or empty
+                            }
+                            clearAjaxError();
+                        }
+                    } else {
+                        const searchTerm = $(this).val().toLowerCase();
+                        filterOptions(searchTerm);
+                    }
                 });
             }
 
@@ -207,21 +285,55 @@ const IOSelect = (function () {
 
             // Add/remove item
             function toggleItem(itemId) {
-                if (itemId === '') return; // Don't process empty option
-                const $option = $select.find(`option[value="${itemId}"]`);
-                const isCurrentlySelected = $option.prop('selected');
+                if (itemId === '' || typeof itemId === 'undefined') return; // Don't process empty or undefined itemId
+
+                let optionData = null;
+                if (isAjaxMode) {
+                    // Find by comparing string versions of IDs, as item.id could be number and itemId string or vice-versa
+                    optionData = currentFilteredOptions.find(opt => opt.id.toString() == itemId.toString());
+                }
+
+                let $nativeOption = $select.find(`option[value="${itemId}"]`);
+
+                // If the option doesn't exist in the native select (common for AJAX-loaded items)
+                // and we are trying to select it (i.e., it's not currently selected or doesn't exist to be selected)
+                // or if it's for multiple select where we always toggle.
+                // For single select, if it's a new item, we are effectively selecting it.
+                if (!$nativeOption.length) {
+                    if (itemId) { // Ensure itemId is valid before creating an option
+                        const optionText = optionData && optionData.name ? optionData.name : itemId.toString();
+                        $nativeOption = $('<option>').val(itemId).text(optionText);
+                        $select.append($nativeOption);
+
+                        // If this new option was sourced from currentFilteredOptions (AJAX),
+                        // ensure it's also in allOptions so getSelectedItems can find its text.
+                        // This might be slightly redundant if fetchAjaxOptions already syncs allOptions,
+                        // but good for robustness.
+                        if (optionData && !allOptions.some(opt => opt.id.toString() == itemId.toString())) {
+                            allOptions.push(optionData);
+                        }
+                    } else {
+                        return; // Cannot toggle an invalid itemId if option doesn't exist
+                    }
+                }
+
+                const isCurrentlySelected = $nativeOption.prop('selected');
 
                 if (isMultiple) {
-                    $option.prop('selected', !isCurrentlySelected);
+                    $nativeOption.prop('selected', !isCurrentlySelected);
                 } else {
                     if (isCurrentlySelected) {
-                        // Remove selection and select empty option
+                        // For single-select, if de-selecting, select the placeholder if one exists.
                         $select.find('option').prop('selected', false);
-                        $select.find('option[value=""]').prop('selected', true);
+                        // Attempt to select an empty value option if available (common placeholder pattern)
+                        const $emptyOption = $select.find('option[value=""]');
+                        if ($emptyOption.length) {
+                            $emptyOption.prop('selected', true);
+                        }
                     } else {
-                        // Make new selection
+                        // Make new selection (deselect all others, then select the current one)
                         $select.find('option').prop('selected', false);
-                        $option.prop('selected', true);
+                        $nativeOption.prop('selected', true);
                     }
                     hideDropdown();
                 }
@@ -235,24 +347,165 @@ const IOSelect = (function () {
                 updateSelectedItems();
             }
 
-            // Filter options
-            // Filter options
+            // AJAX specific helper functions
+            function showAjaxLoadingIndicator() {
+                if (!isAjaxMode) return;
+                $container.addClass('io-select-loading'); // Add class to main container
+                 // Optionally, add a spinner or loading text to $optionsList or $dropdown
+                if ($optionsList.find('.io-select-loader-message').length === 0) {
+                    const $loaderMsg = $('<li>').addClass('io-select-loader-message text-sm px-3 py-2 text-gray-500 dark:text-gray-400 text-center').text('Loading...');
+                    if (settings.virtualScroll && $optionsSizer) {
+                         // For virtual scroll, ensure it's visible and not part of sizer
+                        $loaderMsg.css({position: 'relative'}); // Not absolute like options
+                         $optionsList.append($loaderMsg);
+                    } else {
+                        $optionsList.prepend($loaderMsg); // Or append, depending on desired position
+                    }
+                }
+
+            }
+
+            function hideAjaxLoadingIndicator() {
+                if (!isAjaxMode) return;
+                $container.removeClass('io-select-loading');
+                $optionsList.find('.io-select-loader-message').remove();
+            }
+
+            function showAjaxError(message) {
+                if (!isAjaxMode) return;
+                clearAjaxError(); // Clear previous errors
+                const $errorMsg = $('<li>').addClass('io-select-error-message text-sm px-3 py-2 text-red-500 dark:text-red-400 text-center').text(message);
+                 if (settings.virtualScroll && $optionsSizer) {
+                    $errorMsg.css({position: 'relative'});
+                    $optionsList.append($errorMsg);
+                } else {
+                    $optionsList.prepend($errorMsg);
+                }
+            }
+
+            function clearAjaxError() {
+                if (!isAjaxMode) return;
+                $optionsList.find('.io-select-error-message').remove();
+            }
+
+            function fetchAjaxOptions(searchTerm, pageNumber, isNewSearch) {
+                if (!isAjaxMode || ajaxIsLoading) {
+                    return;
+                }
+                ajaxIsLoading = true;
+                ajaxCurrentSearchTerm = searchTerm; // Store the term for this request
+                if (isNewSearch) {
+                    ajaxCurrentPage = 1;
+                    ajaxHasMorePages = true; // Reset for new search
+                } else {
+                    ajaxCurrentPage = pageNumber;
+                }
+
+                showAjaxLoadingIndicator();
+                clearAjaxError();
+
+                const requestData = settings.ajax.data.call(null, { term: searchTerm, page: ajaxCurrentPage });
+
+                $.ajax({
+                    url: settings.ajax.url,
+                    method: settings.ajax.method || 'GET',
+                    dataType: settings.ajax.dataType || 'json',
+                    data: requestData,
+                    success: function(response) {
+                        const processed = settings.ajax.processResults.call(null, response, { term: searchTerm, page: ajaxCurrentPage });
+                        const newResults = processed.results || [];
+                        ajaxHasMorePages = processed.pagination && processed.pagination.more ? true : false;
+
+                        if (isNewSearch) {
+                            currentFilteredOptions = newResults;
+                            if (settings.virtualScroll && $optionsSizer) {
+                                $dropdown.scrollTop(0); // Reset scroll for new results
+                            }
+                        } else {
+                            // Filter out duplicates that might come from server pagination if items can overlap
+                            const existingIds = new Set(currentFilteredOptions.map(opt => opt.id.toString()));
+                            const uniqueNewResults = newResults.filter(opt => !existingIds.has(opt.id.toString()));
+                            currentFilteredOptions = currentFilteredOptions.concat(uniqueNewResults);
+                        }
+
+                        // Update allOptions to reflect the latest set from AJAX.
+                        // This line ensures that if we select an item from AJAX results, it's "known".
+                        // For a pure AJAX setup where options are not kept client-side beyond display, this might be handled differently.
+                        // For now, this ensures `getSelectedItems` can find names for selected AJAX items.
+                        newResults.forEach(item => {
+                            const existingIndex = allOptions.findIndex(opt => opt.id === item.id);
+                            if (existingIndex > -1) {
+                                allOptions[existingIndex] = item;
+                            } else {
+                                allOptions.push(item);
+                            }
+                        });
+
+
+                        if (settings.virtualScroll && $optionsSizer) {
+                            $optionsSizer.height(currentFilteredOptions.length * settings.optionHeight);
+                            renderVisibleOptions();
+                        } else {
+                            renderAllOptions();
+                        }
+
+                        if (currentFilteredOptions.length === 0 && searchTerm && !ajaxHasMorePages) {
+                             // This is handled by renderVisibleOptions/renderAllOptions which show settings.noResultsText
+                        } else if (currentFilteredOptions.length === 0 && !searchTerm && !ajaxHasMorePages) {
+                            // Optionally show a different message like "Type to search" or use noResultsText
+                             if (settings.virtualScroll && $optionsSizer) renderVisibleOptions(); else renderAllOptions();
+                        }
+
+                    },
+                    error: function(jqXHR, textStatus, errorThrown) {
+                        showAjaxError('Error: ' + (jqXHR.responseJSON && jqXHR.responseJSON.message || errorThrown || textStatus));
+                        currentFilteredOptions = [];
+                        ajaxHasMorePages = false;
+                        // Consider not wiping allOptions here, it might contain resolved pre-selected items.
+                        // allOptions = [];
+                        if (settings.virtualScroll && $optionsSizer) {
+                             $optionsSizer.height(0); renderVisibleOptions();
+                        } else {
+                            renderAllOptions();
+                        }
+                    },
+                    complete: function() {
+                        ajaxIsLoading = false;
+                        hideAjaxLoadingIndicator();
+                    }
+                });
+            }
+
+
+            // Filter options (Primarily for non-AJAX mode now)
             function filterOptions(searchTerm) {
+                // This function is primarily for non-AJAX mode or for client-side filtering
+                // if settings.ajax.clientSideFilter is ever implemented.
+                // For current AJAX mode, server does filtering, and fetchAjaxOptions directly calls rendering.
+                if (isAjaxMode && !(settings.ajax && settings.ajax.clientSideFilter)) {
+                    // If AJAX mode and no client-side filter, just render current options.
+                    // This might be called if dropdown is re-opened and has existing AJAX items.
+                    if (settings.virtualScroll && $optionsSizer) {
+                        $optionsSizer.height(currentFilteredOptions.length * settings.optionHeight);
+                        renderVisibleOptions();
+                    } else {
+                        renderAllOptions();
+                    }
+                    return;
+                }
+
+                // Non-AJAX filtering or Client-side filtering for AJAX results:
                 const newFilteredOptions = allOptions.filter(item =>
                     !searchTerm || item.name.toLowerCase().includes(searchTerm.toLowerCase())
                 );
-                currentFilteredOptions = newFilteredOptions; // Always update this for other logic
+                currentFilteredOptions = newFilteredOptions;
 
-                if (settings.virtualScroll) {
-                    if (!$optionsSizer) { // Should not happen if initialized correctly, but as a safeguard
-                        console.error("IO Select: $optionsSizer not initialized for virtual scroll.");
-                        return;
-                    }
+                if (settings.virtualScroll && $optionsSizer) {
                     $optionsSizer.height(currentFilteredOptions.length * settings.optionHeight);
-                    $dropdown.scrollTop(0); // Reset scroll position for virtual scroll
-                    renderVisibleOptions(); // Render initial visible options for virtual scroll
+                    $dropdown.scrollTop(0);
+                    renderVisibleOptions();
                 } else {
-                    renderAllOptions(); // Render all for non-virtual scroll
+                    renderAllOptions();
                 }
             }
 
@@ -388,9 +641,41 @@ const IOSelect = (function () {
                 const isExpanded = !$dropdown.hasClass('hidden');
                 $dropdown.toggleClass('hidden');
                 $selectBox.attr('aria-expanded', (!isExpanded).toString());
-                if (!isExpanded) {
-                    const searchTerm = settings.searchable && $searchInput ? $searchInput.val().toLowerCase() : '';
-                    filterOptions(searchTerm);
+
+                if (!isExpanded) { // Dropdown is opening
+                    if (isAjaxMode) {
+                        clearAjaxError();
+                        // If min search length is 0, and no search term, and list is empty (or first time)
+                        // then fetch initial results.
+                        // The check for currentFilteredOptions.length === 0 might be too simple if we allow clearing search to show initial list.
+                        // A flag like `ajaxInitialLoadDone` might be better. For now, this is a basic initial load.
+                        const currentSearchVal = settings.searchable && $searchInput ? $searchInput.val() : '';
+                        if (settings.ajax.triggerMinSearchTermLength === 0 && currentSearchVal.length === 0 && currentFilteredOptions.length === 0) {
+                             // Only fetch if truly empty and no search term typed yet, and min length is 0
+                            fetchAjaxOptions('', 1, true);
+                        } else if (currentFilteredOptions.length > 0) {
+                            // If there are already options (e.g. from a previous search or pre-filled), just render them.
+                            if (settings.virtualScroll && $optionsSizer) {
+                                // Ensure sizer is correct for current items if list was manipulated
+                                $optionsSizer.height(currentFilteredOptions.length * settings.optionHeight);
+                                renderVisibleOptions();
+                            } else {
+                                renderAllOptions();
+                            }
+                        } else if (settings.ajax.triggerMinSearchTermLength > 0 && currentFilteredOptions.length === 0 && !ajaxIsLoading){
+                            // If min search length > 0 and list is empty, show "no results" or "type to search"
+                            // This is typically handled by render functions when currentFilteredOptions is empty
+                             if (settings.virtualScroll && $optionsSizer) renderVisibleOptions(); else renderAllOptions();
+                        }
+                        // If search input has text satisfying minLength, search will be triggered by keyup if user types.
+                        // Or, if we want to trigger search on open if text is present:
+                        // else if (currentSearchVal.length >= settings.ajax.triggerMinSearchTermLength) {
+                        //    fetchAjaxOptions(currentSearchVal, 1, true);
+                        // }
+                    } else {
+                        const searchTerm = settings.searchable && $searchInput ? $searchInput.val().toLowerCase() : '';
+                        filterOptions(searchTerm); // Non-AJAX mode: filter existing options
+                    }
                 }
             }
 
@@ -403,10 +688,35 @@ const IOSelect = (function () {
             $selectBox.on('click', toggleDropdown);
 
             if (settings.virtualScroll) {
-                let debouncedRender = debounce(renderVisibleOptions, 50); // Debounce with 50ms delay
-                $dropdown.on('scroll.io-select-virtual', debouncedRender);
+                // Debounced function for rendering options during virtual scroll
+                const debouncedVirtualRender = debounce(function() {
+                    renderVisibleOptions();
+                    // AJAX Pagination check, integrated into the debounced render for virtual scroll
+                    if (isAjaxMode && !ajaxIsLoading && ajaxHasMorePages) {
+                        const threshold = 1.5 * settings.optionHeight;
+                        if ($dropdown[0].scrollHeight > $dropdown.innerHeight() &&
+                            $dropdown.scrollTop() + $dropdown.innerHeight() >= $dropdown[0].scrollHeight - threshold) {
+                            ajaxCurrentPage++;
+                            fetchAjaxOptions(ajaxCurrentSearchTerm, ajaxCurrentPage, false);
+                        }
+                    }
+                }, 50);
+                $dropdown.on('scroll.io-select-virtual', debouncedVirtualRender);
+            } else if (isAjaxMode) {
+                // If not virtual scrolling, but AJAX mode is on, we still need a scroll listener for pagination
+                $dropdown.on('scroll.io-select-ajax-pagination', function() {
+                    if (!ajaxIsLoading && ajaxHasMorePages) {
+                        const threshold = 1.5 * settings.optionHeight;
+                         // Check if scrollHeight is meaningful
+                        if ($dropdown[0].scrollHeight > $dropdown.innerHeight() &&
+                            $dropdown.scrollTop() + $dropdown.innerHeight() >= $dropdown[0].scrollHeight - threshold) {
+                            ajaxCurrentPage++;
+                            fetchAjaxOptions(ajaxCurrentSearchTerm, ajaxCurrentPage, false);
+                        }
+                    }
+                });
             }
-            // No scroll listener needed if not virtual scrolling, as all options are rendered
+            // For non-AJAX, non-virtual scroll, no specific scroll listener on $dropdown is needed from here.
 
             $(document).on('click.io-select.' + $select.attr('id'), function (e) {
                 if (!$(e.target).closest('.io-select-container').length) {
@@ -421,8 +731,66 @@ const IOSelect = (function () {
             // Hide original select and add container
             $select.hide().after($container);
 
-            // Set initial state
-            updateSelectedItems();
+            // Initial value resolution via AJAX if configured
+            if (isAjaxMode && typeof settings.ajax.initialValueUrl === 'string' && settings.ajax.initialValueUrl.trim() !== '') {
+                const selectedValues = $select.find('option:selected').map(function() { return $(this).val(); }).get();
+                const idsToResolve = selectedValues.filter(id => {
+                    return id && id.trim() !== '' && !allOptions.some(opt => opt.id === id && opt.name && opt.name.trim() !== '');
+                });
+
+                if (idsToResolve.length > 0) {
+                    // Determine data format based on method
+                    let ajaxData;
+                    const ajaxMethod = (settings.ajax.method || 'GET').toUpperCase();
+                    if (ajaxMethod === 'GET' || ajaxMethod === 'DELETE') { // Methods typically using query params
+                        ajaxData = { ids: idsToResolve.join(',') };
+                    } else { // POST, PUT - typically send data as object/JSON
+                        ajaxData = { ids: idsToResolve };
+                    }
+
+                    // ajaxIsLoading = true; // Consider adding a loading state for this specific call
+                    $.ajax({
+                        url: settings.ajax.initialValueUrl,
+                        method: ajaxMethod,
+                        dataType: settings.ajax.dataType || 'json',
+                        data: ajaxData,
+                        success: function(response) {
+                            const processed = settings.ajax.processResults.call(null, response, { ids: idsToResolve });
+                            const resolvedItems = processed.results || [];
+
+                            resolvedItems.forEach(item => {
+                                if (!item.id) return; // Skip items without an ID from server
+                                const existingOptionIndex = allOptions.findIndex(opt => opt.id === item.id.toString());
+                                if (existingOptionIndex > -1) {
+                                    allOptions[existingOptionIndex] = { ...allOptions[existingOptionIndex], ...item, selected: true, name: item.name || allOptions[existingOptionIndex].name };
+                                } else {
+                                    // Only add if it was indeed one of the ids we tried to resolve,
+                                    // and it's not already effectively present (e.g. from original <select>)
+                                    if (idsToResolve.includes(item.id.toString())) {
+                                       allOptions.push({ ...item, id: item.id.toString(), selected: true });
+                                    }
+                                }
+                            });
+
+                            currentFilteredOptions = [...allOptions];
+                            updateSelectedItems(); // Update display with newly fetched text
+                        },
+                        error: function() {
+                            // console.error('IO Select: Failed to fetch initial values from initialValueUrl.');
+                            // updateSelectedItems(); // Still update, even if fetch failed, to show what we have
+                        },
+                        complete: function() {
+                            // ajaxIsLoading = false;
+                        }
+                    });
+                } else {
+                    // No IDs to resolve, or all already have text. Ensure initial display is correct.
+                    updateSelectedItems();
+                }
+            } else {
+                 // Set initial state for non-AJAX or no initialValueUrl
+                updateSelectedItems();
+            }
         });
     };
 
