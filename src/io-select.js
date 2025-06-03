@@ -8,6 +8,16 @@ const IOSelect = (function () {
         return;
     }
 
+    // Note: OPTION_HEIGHT and VISIBLE_OPTIONS_BUFFER are now moved into settings defaults
+    function debounce(func, wait) {
+        let timeout;
+        return function(...args) {
+            const context = this;
+            clearTimeout(timeout);
+            timeout = setTimeout(() => func.apply(context, args), wait);
+        };
+    }
+
     // IO Select Plugin
     $.fn.ioSelect = function (options) {
         // If a string parameter is provided, it's a method call
@@ -42,7 +52,10 @@ const IOSelect = (function () {
             placeholder: 'Make a selection',
             searchPlaceholder: 'Search...',
             noResultsText: 'No results found',
-            searchable: true
+            searchable: true,
+            virtualScroll: true,
+            optionHeight: 36,       // Default height of an option item in pixels
+            virtualScrollBuffer: 5  // Number of options to render above/below visible area
         };
 
         // Merge user settings with defaults
@@ -52,6 +65,7 @@ const IOSelect = (function () {
         return this.each(function () {
             const $select = $(this);
             const isMultiple = $select.prop('multiple');
+            let currentFilteredOptions = []; // Holds the currently filtered list of options
 
             // Get all options
             const allOptions = Array.from($select.find('option')).map(option => ({
@@ -123,8 +137,23 @@ const IOSelect = (function () {
                 });
             }
 
-            // Options list
-            const $optionsList = $('<ul>').addClass('py-1');
+            let $optionsList;
+            let $optionsSizer = null; // Initialize to null, only created if virtualScroll is true
+
+            if (settings.virtualScroll) {
+                $optionsList = $('<ul>').css({
+                    position: 'relative',
+                    overflow: 'hidden',
+                    // height will be implicitly set by $dropdown's max-height
+                });
+                $optionsSizer = $('<div>').css({ // Sizer div for scrollbar
+                    width: '100%',
+                    opacity: 0,
+                });
+                $optionsList.append($optionsSizer);
+            } else {
+                $optionsList = $('<ul>').addClass('py-1'); // Original class for padding
+            }
             $dropdown.append($optionsList);
 
             // Update selected items
@@ -207,24 +236,83 @@ const IOSelect = (function () {
             }
 
             // Filter options
+            // Filter options
             function filterOptions(searchTerm) {
-                $optionsList.empty();
-
-                const filteredOptions = allOptions.filter(item => 
+                const newFilteredOptions = allOptions.filter(item =>
                     !searchTerm || item.name.toLowerCase().includes(searchTerm.toLowerCase())
                 );
+                currentFilteredOptions = newFilteredOptions; // Always update this for other logic
 
-                if (filteredOptions.length === 0) {
+                if (settings.virtualScroll) {
+                    if (!$optionsSizer) { // Should not happen if initialized correctly, but as a safeguard
+                        console.error("IO Select: $optionsSizer not initialized for virtual scroll.");
+                        return;
+                    }
+                    $optionsSizer.height(currentFilteredOptions.length * settings.optionHeight);
+                    $dropdown.scrollTop(0); // Reset scroll position for virtual scroll
+                    renderVisibleOptions(); // Render initial visible options for virtual scroll
+                } else {
+                    renderAllOptions(); // Render all for non-virtual scroll
+                }
+            }
+
+            // Render all options (non-virtualized)
+            function renderAllOptions() {
+                $optionsList.empty(); // Clear all previous items
+
+                if (currentFilteredOptions.length === 0) {
                     const $noResults = $('<li>').addClass(`
                         text-sm px-3 py-2 text-gray-500 dark:text-gray-400
                         cursor-default text-center
-                    `).text(settings.noResultsText);
+                    `).text(settings.noResultsText); // No specific class needed like 'io-select-no-results' unless for consistency
                     $optionsList.append($noResults);
                 } else {
-                    filteredOptions.forEach(item => {
+                    currentFilteredOptions.forEach(item => {
                         const $option = createOptionElement(item);
+                        // No special positioning needed for non-virtualized items
                         $optionsList.append($option);
                     });
+                }
+            }
+
+            // Render only visible options (virtualized)
+            function renderVisibleOptions() {
+                if (!settings.virtualScroll || !$optionsSizer) return; // Should only be called if virtualScroll is true
+
+                const scrollTop = $dropdown.scrollTop();
+                const dropdownHeight = $dropdown.height();
+
+                // Clear previous options, but not the sizer or a potential noResults message
+                $optionsList.children().not($optionsSizer).not('.io-select-no-results').remove();
+
+                // Remove previous no results message if it exists
+                $optionsList.find('.io-select-no-results').remove();
+
+                if (currentFilteredOptions.length === 0) {
+                    $optionsSizer.height(0); // Ensure sizer is 0 if no results
+                    const $noResults = $('<li>').addClass(`
+                        text-sm px-3 py-2 text-gray-500 dark:text-gray-400
+                        cursor-default text-center io-select-no-results
+                    `).text(settings.noResultsText); // Specific class for targeted removal
+                    $optionsList.append($noResults);
+                    return;
+                }
+
+                $optionsSizer.height(currentFilteredOptions.length * settings.optionHeight);
+
+                const startIndex = Math.max(0, Math.floor(scrollTop / settings.optionHeight) - settings.virtualScrollBuffer);
+                const endIndex = Math.min(currentFilteredOptions.length, Math.ceil((scrollTop + dropdownHeight) / settings.optionHeight) + settings.virtualScrollBuffer);
+
+                for (let i = startIndex; i < endIndex; i++) {
+                    const item = currentFilteredOptions[i];
+                    const $option = createOptionElement(item);
+                    $option.css({
+                        position: 'absolute',
+                        top: (i * settings.optionHeight) + 'px',
+                        width: '100%',
+                        left: 0
+                    });
+                    $optionsList.append($option);
                 }
             }
 
@@ -313,6 +401,13 @@ const IOSelect = (function () {
 
             // Event listeners
             $selectBox.on('click', toggleDropdown);
+
+            if (settings.virtualScroll) {
+                let debouncedRender = debounce(renderVisibleOptions, 50); // Debounce with 50ms delay
+                $dropdown.on('scroll.io-select-virtual', debouncedRender);
+            }
+            // No scroll listener needed if not virtual scrolling, as all options are rendered
+
             $(document).on('click.io-select.' + $select.attr('id'), function (e) {
                 if (!$(e.target).closest('.io-select-container').length) {
                     hideDropdown();
