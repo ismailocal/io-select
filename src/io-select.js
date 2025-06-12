@@ -30,6 +30,9 @@ const IOSelect = (function () {
 
                         // Show select element
                         $select.show();
+                        
+                        // Remove initialization flag
+                        $select.removeData('io-select-initialized');
                     });
                 default:
                     console.error(`IO Select: Method ${method} does not exist`);
@@ -51,6 +54,16 @@ const IOSelect = (function () {
         // Process each select element
         return this.each(function () {
             const $select = $(this);
+
+            // Check if already initialized
+            if ($select.data('io-select-initialized')) {
+                // If already initialized, destroy first
+                $select.ioSelect('destroy');
+            }
+
+            // Mark as initialized
+            $select.data('io-select-initialized', true);
+
             const isMultiple = $select.prop('multiple');
 
             // Get all options
