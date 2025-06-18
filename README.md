@@ -72,6 +72,55 @@ $('#multiSelect').ioSelect({
 | noResultsText | string | 'No results found' | Text to display when no search results are found |
 | searchable | boolean | true | Enable/disable search functionality |
 
+## Ajax Support
+
+IO Select can fetch data remotely using Ajax. To enable Ajax functionality, provide an `ajax` object in the settings.
+
+| Ajax Option         | Type     | Default        | Description                                                                                                                               |
+|---------------------|----------|----------------|-------------------------------------------------------------------------------------------------------------------------------------------|
+| `ajax`              | object   | `null`         | Main configuration object for Ajax. If provided, Ajax mode is enabled.                                                                  |
+| `ajax.url`          | string   | `''`           | The URL to which the Ajax request will be sent.                                                                                           |
+| `ajax.type`         | string   | `'GET'`        | The HTTP method for the Ajax request (e.g., 'GET', 'POST').                                                                               |
+| `ajax.dataType`     | string   | `'json'`       | The expected data type of the server's response.                                                                                          |
+| `ajax.delay`        | number   | `250`          | Debounce delay in milliseconds before sending the Ajax request after the user stops typing.                                                 |
+| `ajax.data`         | function | (see desc.)    | A function that returns an object of parameters to send with the request. <br> It receives `params` object with `term` (search term) and `page` (current page, defaults to 1). <br> Example: `function(params) { return { search: params.term, p: params.page }; }` |
+| `ajax.processResults` | function | (see desc.)    | A function to process the raw Ajax response before rendering. <br> It receives `data` (response from server) and `params` (request parameters). <br> It **must** return an array of objects in the format `[{ id: 'uniqueValue', name: 'DisplayText' }]`. <br> *Note: Future versions might support Select2-style return objects for pagination.* |
+| `ajax.cache`        | boolean  | `false`        | If set to `true`, Ajax responses will be cached locally to avoid redundant requests for the same search term and parameters.                |
+
+**Example of Ajax Configuration:**
+
+```javascript
+$('#myAjaxSelect').ioSelect({
+  placeholder: 'Search for an item...',
+  searchPlaceholder: 'Type to begin searching',
+  ajax: {
+    url: 'https://api.example.com/items',
+    dataType: 'json',
+    delay: 300,
+    data: function(params) {
+      return {
+        q: params.term, // Search term
+        page: params.page || 1 // Page number
+      };
+    },
+    processResults: function(data, params) {
+      // Assuming server returns data in format like: { results: [{id: 1, text: 'Item 1'}, ...] }
+      // We need to transform it to: [{ id: 1, name: 'Item 1'}, ...]
+      return data.results.map(function(item) {
+        return {
+          id: item.id,
+          name: item.text
+        };
+      });
+    },
+    cache: true
+  }
+});
+```
+
+**Loading and Error Handling:**
+The plugin automatically displays a "Loading..." message in the dropdown while an Ajax request is in progress. If the request fails or an error occurs, an error message will be shown.
+
 ## Methods
 
 ### destroy

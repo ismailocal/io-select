@@ -143,6 +143,49 @@
                 <pre id="noSearchSelectOutput">null</pre>
             </div>
         </div>
+
+        <!-- Ajax Usage -->
+        <div class="demo-section bg-white dark:bg-gray-800 shadow">
+            <h2 class="text-gray-900 dark:text-white">Ajax Usage</h2>
+            <div class="mb-4">
+                <label for="ajaxSelect" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Search for items (simulated Ajax):</label>
+                <select id="ajaxSelect" name="ajaxSelect" class="w-full"></select>
+                <!-- Note: No initial options needed here as they will be fetched via Ajax -->
+            </div>
+            <div class="code-block dark:bg-gray-700 dark:text-gray-300">
+                <pre>
+$('#ajaxSelect').ioSelect({
+    ajax: {
+        url: 'https://api.example.com/data', // Placeholder URL
+        dataType: 'json',
+        delay: 300, // Debounce delay
+        data: function(params) {
+            // params contains term and page
+            return {
+                q: params.term,
+                page: params.page || 1
+            };
+        },
+        processResults: function(data, params) {
+            // data is the raw response from server
+            // Plugin expects an array of {id: '', name: ''}
+            // Example assumes server returns { items: [], total_count: N }
+            return (data.items || []).map(item => ({
+                id: item.id,
+                name: item.name
+            }));
+        },
+        cache: true
+    },
+    placeholder: 'Search via Ajax...',
+    searchPlaceholder: 'Type to search items...'
+});</pre>
+            </div>
+            <div class="output-json">
+                <strong>Selected Value:</strong>
+                <pre id="ajaxSelectOutput">null</pre>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -188,7 +231,108 @@
             }).on('change', function() {
                 updateOutput('#noSearchSelect', '#noSearchSelectOutput');
             });
+
+            // Initial values for static selects
+            updateOutput('#basicSelect', '#basicSelectOutput');
+            updateOutput('#multiSelect', '#multiSelectOutput');
+            updateOutput('#customSelect', '#customSelectOutput');
+            updateOutput('#noSearchSelect', '#noSearchSelectOutput');
+
+
+            // --- AJAX Example Setup ---
+            const originalAjax = $.ajax; // Store original $.ajax
+
+            $.ajax = function(ajaxReqOptions) { // Override $.ajax
+                if (ajaxReqOptions.url === 'https://api.example.com/data') {
+                    console.log('Simulating Ajax request for:', ajaxReqOptions.data);
+                    setTimeout(function() {
+                        const term = ajaxReqOptions.data.q || 'initial'; // Default term for simulation
+                        const page = ajaxReqOptions.data.page || 1;
+                        let items = [];
+                        const totalItemsForTerm = 3; // Max items to generate for a given term
+
+                        for(let i = 1; i <= totalItemsForTerm; i++) {
+                            items.push({
+                                id: term.replace(/\s+/g, '_') + '_' + i + '_p' + page, // Create somewhat unique IDs
+                                name: `Item ${i} for "${term}" (Page ${page})`
+                            });
+                        }
+
+                        // Simulate no results for a specific term
+                        if (term === "noresults") {
+                            items = [];
+                        }
+
+                        const mockData = {
+                            items: items,
+                            total_count: term === "noresults" ? 0 : (page < 2 ? 25 : items.length) // Simulate pagination: more if page 1
+                        };
+
+                        console.log('Simulated response:', mockData);
+                        if (ajaxReqOptions.success) {
+                            ajaxReqOptions.success(mockData); // Pass only data to success, ioSelect handles the params for processResults
+                        }
+                    }, 800); // Simulate network delay
+                } else {
+                    // For any other URL, use the original $.ajax
+                    return originalAjax.apply(this, arguments);
+                }
+            };
+
+            $('#ajaxSelect').ioSelect({
+                ajax: {
+                    url: 'https://api.example.com/data',
+                    dataType: 'json',
+                    delay: 300,
+                    data: function(params) {
+                        return {
+                            q: params.term, // search term from ioSelect
+                            page: params.page || 1 // page number from ioSelect (if pagination is implemented)
+                        };
+                    },
+                    processResults: function(dataFromServer, requestParams) {
+                        // dataFromServer is the {items: [], total_count: N} from our mock
+                        // requestParams is {term: '...', page: '...'} from settings.ajax.data
+                        console.log('processResults received dataFromServer:', dataFromServer);
+                        console.log('processResults received requestParams:', requestParams);
+                        return (dataFromServer.items || []).map(item => ({
+                            id: item.id,
+                            name: item.name
+                        }));
+                        // Note: io-select currently doesn't use pagination info from processResults
+                        // If it did, we might return:
+                        // return { results: mappedItems, pagination: { more: (requestParams.page * 10) < dataFromServer.total_count } };
+                    },
+                    cache: true
+                },
+                placeholder: 'Search via Ajax...',
+                searchPlaceholder: 'Type to search items (e.g., "test", "noresults")'
+            }).on('change', function() {
+                // For Ajax, $(this).val() gives the ID. We might want to display more.
+                // For simplicity, just show the value. If an option isn't added to the
+                // hidden select, .val() might be tricky. ioSelect's updateSelectedItems
+                // should handle setting the original select's value.
+                $('#ajaxSelectOutput').text(JSON.stringify($(this).val(), null, 2));
+            });
+            // Initialize output for ajaxSelect
+            $('#ajaxSelectOutput').text(JSON.stringify($('#ajaxSelect').val(), null, 2));
+
+
+            // Restore original $.ajax IF it's the very last thing you do.
+            // If other async operations or other plugins might use $.ajax later in this ready block,
+            // this might be too soon. For this example, it's likely fine.
+            // $.ajax = originalAjax;
+            // Better: ensure it's restored after all setups that might need the mock.
+            // For this specific file structure, it can be at the end of this $(document).ready.
+
+            // Restore original $.ajax after all initializations within this ready block are done.
+            $.ajax = originalAjax;
         });
+
+        // It's generally safer to restore $.ajax outside the ready function if possible,
+        // or ensure all dependent initializations are truly complete.
+        // However, for this single file example, end of ready is usually okay.
+        // $(window).on('load', function() { $.ajax = originalAjax; }); // Or even later
     </script>
 </body>
 </html> 
