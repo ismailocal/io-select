@@ -2,6 +2,18 @@
 
 A modern and customizable jQuery select plugin. Styled with Tailwind CSS, featuring search functionality and multiple selection support.
 
+**Current Version:** 1.0.3
+
+## What's New (v1.0.3)
+
+- 🚀 **AJAX ile dinamik arama ve seçenek desteği**
+- 🏷️ **initialSelected**: Başlangıçta seçili değerleri JS ile belirleyebilme (single & multiple, AJAX destekli)
+- ⏳ **Debounce**: AJAX aramalarında gereksiz istekleri önleyen debounce
+- 📌 **Sticky Search**: Dropdown arama kutusu sticky
+- 🔄 **Loading/No Results UX**: AJAX sırasında "Yükleniyor..." ve sonuç yoksa "Ürün bulunamadı" mesajları
+- ❌ **Çarpı ile temizleme**: Single/multiple selectte seçimi kolayca temizleme
+- 🐞 **Birçok bugfix ve UX iyileştirmesi**
+
 ## Demo
 
 Check out the live demo here: [https://ismailocal.github.io/io-select/examples/index.html](https://ismailocal.github.io/io-select/examples/index.html)

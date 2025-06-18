@@ -45,7 +45,9 @@ const IOSelect = (function () {
             placeholder: 'Make a selection',
             searchPlaceholder: 'Search...',
             noResultsText: 'No results found',
-            searchable: true
+            searchable: true,
+            ajax: null, // { url: '', method: 'GET', dataKey: 'results', queryParam: 'q' }
+            initialSelected: null // { id: '', name: '' } veya [{ id: '', name: '' }]
         };
 
         // Merge user settings with defaults
@@ -67,7 +69,7 @@ const IOSelect = (function () {
             const isMultiple = $select.prop('multiple');
 
             // Get all options
-            const allOptions = Array.from($select.find('option')).map(option => ({
+            let allOptions = Array.from($select.find('option')).map(option => ({
                 id: option.value,
                 name: option.text
             })).filter(option => option.id !== ''); // Filter empty option
@@ -116,7 +118,7 @@ const IOSelect = (function () {
             let $searchInput = null;
 
             if (settings.searchable) {
-                const $searchContainer = $('<div>').addClass('p-2');
+                const $searchContainer = $('<div>').addClass('p-2 sticky top-0 bg-white dark:bg-gray-700 z-10 border-b');
                 $searchInput = $('<input>').addClass(`
                     text-sm w-full p-2 border border-gray-300 rounded-md
                     dark:bg-gray-600 dark:border-gray-500 dark:text-white
@@ -129,16 +131,35 @@ const IOSelect = (function () {
                 $searchContainer.append($searchInput);
                 $dropdown.append($searchContainer);
 
+                // Debounce fonksiyonu
+                function debounce(func, wait) {
+                    let timeout;
+                    return function(...args) {
+                        clearTimeout(timeout);
+                        timeout = setTimeout(() => func.apply(this, args), wait);
+                    };
+                }
+
                 // Search functionality
-                $searchInput.on('keyup', function () {
-                    const searchTerm = $(this).val().toLowerCase();
-                    filterOptions(searchTerm);
-                });
+                if (settings.ajax && settings.ajax.url) {
+                    $searchInput.on('keyup', debounce(function () {
+                        const searchTerm = $(this).val().toLowerCase();
+                        ajaxFetchOptions(searchTerm);
+                    }, 300));
+                } else {
+                    $searchInput.on('keyup', function () {
+                        const searchTerm = $(this).val().toLowerCase();
+                        filterOptions(searchTerm);
+                    });
+                }
             }
 
             // Options list
             const $optionsList = $('<ul>').addClass('py-1');
             $dropdown.append($optionsList);
+
+            // isLoading state
+            let isLoading = false;
 
             // Update selected items
             function updateSelectedItems() {
@@ -192,13 +213,21 @@ const IOSelect = (function () {
             // Add/remove item
             function toggleItem(itemId) {
                 if (itemId === '') return; // Don't process empty option
-                const $option = $select.find(`option[value="${itemId}"]`);
-                const isCurrentlySelected = $option.prop('selected');
+                let $option = $select.find(`option[value="${itemId}"]`);
+                // Eğer option yoksa, AJAX ile gelmiştir, ekle
+                if ($option.length === 0) {
+                    // allOptions içinden label'ı bul
+                    const found = allOptions.find(opt => String(opt.id) === String(itemId));
+                    const label = (found && (found.name || found.title)) || itemId;
+                    $option = $(`<option>`).val(itemId).text(label);
+                    $select.append($option);
+                }
+                let isSelected = $select.find(`option[value="${itemId}"]`).prop('selected');
 
                 if (isMultiple) {
-                    $option.prop('selected', !isCurrentlySelected);
+                    $option.prop('selected', !isSelected);
                 } else {
-                    if (isCurrentlySelected) {
+                    if (isSelected) {
                         // Remove selection and select empty option
                         $select.find('option').prop('selected', false);
                         $select.find('option[value=""]').prop('selected', true);
@@ -216,40 +245,107 @@ const IOSelect = (function () {
             // Remove item
             function removeItem(itemId) {
                 $select.find(`option[value="${itemId}"]`).prop('selected', false);
+                // Eğer single select ve AJAX modundaysa, boş option ekle ve seçili yap
+                if (!isMultiple && settings.ajax && settings.ajax.url) {
+                    let $emptyOption = $select.find('option[value=""]');
+                    if ($emptyOption.length === 0) {
+                        $emptyOption = $('<option>').val('').text('');
+                        $select.prepend($emptyOption);
+                    }
+                    $select.find('option').prop('selected', false);
+                    $emptyOption.prop('selected', true);
+                }
                 updateSelectedItems();
+                // Eğer dropdown açıksa, checkbox'ları güncelle
+                if (!$dropdown.hasClass('hidden')) {
+                    const searchTerm = settings.searchable && $searchInput ? $searchInput.val().toLowerCase() : '';
+                    filterOptions(searchTerm);
+                }
             }
 
             // Filter options
             function filterOptions(searchTerm) {
                 $optionsList.empty();
 
-                const filteredOptions = allOptions.filter(item => 
-                    !searchTerm || item.name.toLowerCase().includes(searchTerm.toLowerCase())
-                );
-
-                if (filteredOptions.length === 0) {
-                    const $noResults = $('<li>').addClass(`
-                        text-sm px-3 py-2 text-gray-500 dark:text-gray-400
-                        cursor-default text-center
-                    `).text(settings.noResultsText);
-                    $optionsList.append($noResults);
+                let filteredOptions;
+                if (settings.ajax && settings.ajax.url) {
+                    // AJAX modunda filtreleme yapma, tüm allOptions'u göster
+                    filteredOptions = allOptions;
+                    if (isLoading) {
+                        const $loading = $('<li>').addClass('text-sm px-3 py-2 text-gray-500 dark:text-gray-400 cursor-default text-center').text('Yükleniyor...');
+                        $optionsList.append($loading);
+                        return;
+                    }
+                    // Eğer veri henüz gelmediyse veya sonuç yoksa, 'Ürün bulunamadı' göster
+                    if (filteredOptions.length === 0) {
+                        const $noResults = $('<li>').addClass(`
+                            text-sm px-3 py-2 text-gray-500 dark:text-gray-400
+                            cursor-default text-center
+                        `).text(settings.noResultsText);
+                        $optionsList.append($noResults);
+                        return;
+                    }
                 } else {
-                    filteredOptions.forEach(item => {
-                        const $option = createOptionElement(item);
-                        $optionsList.append($option);
+                    filteredOptions = allOptions.filter(item => {
+                        const label = item.name || item.title || '';
+                        return !searchTerm || label.toLowerCase().includes(searchTerm.toLowerCase());
                     });
                 }
+
+                filteredOptions.forEach(item => {
+                    const $option = createOptionElement(item);
+                    $optionsList.append($option);
+                });
+            }
+
+            // AJAX ile seçenekleri getir
+            function ajaxFetchOptions(searchTerm) {
+                const ajaxSettings = settings.ajax;
+                const method = ajaxSettings.method || 'GET';
+                const dataKey = ajaxSettings.dataKey || 'data';
+                const queryParam = ajaxSettings.queryParam || 'q';
+                const url = ajaxSettings.url;
+                let ajaxData = {};
+                ajaxData[queryParam] = searchTerm;
+                $optionsList.empty();
+                isLoading = true;
+                filterOptions(searchTerm);
+                $.ajax({
+                    url: url,
+                    method: method,
+                    data: ajaxData,
+                    success: function (response) {
+                        let results = response;
+                        if (dataKey && response[dataKey]) {
+                            results = response[dataKey];
+                        }
+                        // Sonuçları uygun formata çevir
+                        allOptions = results.map(item => ({
+                            id: item.id,
+                            name: item.name || item.title // title varsa onu kullan
+                        }));
+                        isLoading = false;
+                        filterOptions(searchTerm);
+                    },
+                    error: function () {
+                        $optionsList.empty();
+                        const $error = $('<li>').addClass('text-sm px-3 py-2 text-red-500 cursor-default text-center').text('Bir hata oluştu');
+                        $optionsList.append($error);
+                        isLoading = false;
+                    }
+                });
             }
 
             // Create option element
             function createOptionElement(item) {
+                const safeId = (item.id !== undefined && item.id !== null) ? item.id : '';
                 const $option = $('<li>').addClass(`
                     text-sm px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-600
                     cursor-pointer flex items-center
                 `).attr({
                     'role': 'option',
                     'aria-selected': 'false',
-                    'id': `io-select-option-${$select.attr('id')}-${item.id}`
+                    'id': `io-select-option-${$select.attr('id')}-${safeId}`
                 });
 
                 let $checkbox = null; // Initialize $checkbox to null
@@ -261,31 +357,30 @@ const IOSelect = (function () {
                     });
 
                     // Check checkbox status
-                    const isSelected = $select.find(`option[value="${item.id}"]`).prop('selected');
-                    $checkbox.prop('checked', isSelected);
-                    $option.attr('aria-selected', isSelected.toString());
+                    let isSelected = $select.find(`option[value="${safeId}"]`).prop('selected');
+                    $checkbox.prop('checked', !!isSelected);
+                    $option.attr('aria-selected', (!!isSelected).toString());
 
                     $option.append($checkbox); // Append checkbox only if isMultiple is true
                 } else {
                     // For single select, still need to set aria-selected based on the actual select option
-                    const isSelected = $select.find(`option[value="${item.id}"]`).prop('selected');
-                    $option.attr('aria-selected', isSelected.toString());
+                    const isSelected = $select.find(`option[value="${safeId}"]`).prop('selected');
+                    $option.attr('aria-selected', (!!isSelected).toString());
                 }
 
-
-                const $text = $('<span>').text(item.name);
+                const $text = $('<span>').text(item.name || item.title || '');
                 $option.append($text); // Append text regardless of isMultiple
 
                 $option.on('click', function () {
-                    toggleItem(item.id);
+                    toggleItem(safeId);
                     // Update checkbox status only if isMultiple is true
                     if (isMultiple && $checkbox) {
-                        const newSelected = $select.find(`option[value="${item.id}"]`).prop('selected');
-                        $checkbox.prop('checked', newSelected);
+                        const newSelected = $select.find(`option[value="${safeId}"]`).prop('selected');
+                        $checkbox.prop('checked', !!newSelected);
                     }
                     // Always update aria-selected for the option itself
-                    const newSelectedState = $select.find(`option[value="${item.id}"]`).prop('selected');
-                    $option.attr('aria-selected', newSelectedState.toString());
+                    const newSelectedState = $select.find(`option[value="${safeId}"]`).prop('selected');
+                    $option.attr('aria-selected', (!!newSelectedState).toString());
                 });
 
                 return $option;
@@ -315,7 +410,18 @@ const IOSelect = (function () {
                 $selectBox.attr('aria-expanded', (!isExpanded).toString());
                 if (!isExpanded) {
                     const searchTerm = settings.searchable && $searchInput ? $searchInput.val().toLowerCase() : '';
+                    if (settings.ajax && settings.ajax.url) {
+                        // Sadece ilk açılışta veya input boşsa istek at
+                        if (!$searchInput.data('ajax-initial-loaded')) {
+                            ajaxFetchOptions('');
+                            $searchInput.data('ajax-initial-loaded', true);
+                        }
+                    }
                     filterOptions(searchTerm);
+                    // Dropdown açıldığında search input'a focus ol
+                    if (settings.searchable && $searchInput) {
+                        setTimeout(() => $searchInput.focus(), 0);
+                    }
                 }
             }
 
@@ -341,6 +447,37 @@ const IOSelect = (function () {
 
             // Set initial state
             updateSelectedItems();
+
+            // Initial selected işle
+            if (settings.initialSelected) {
+                if (isMultiple && Array.isArray(settings.initialSelected)) {
+                    // Multiple select için array
+                    settings.initialSelected.forEach(item => {
+                        if (item && item.id) {
+                            // Önce mevcut option'da var mı kontrol et
+                            let $option = $select.find(`option[value="${item.id}"]`);
+                            if ($option.length === 0) {
+                                // Yoksa ekle
+                                $option = $(`<option>`).val(item.id).text(item.name || item.title || item.id);
+                                $select.append($option);
+                            }
+                            $option.prop('selected', true);
+                        }
+                    });
+                } else if (!isMultiple && settings.initialSelected && settings.initialSelected.id) {
+                    // Single select için object
+                    const item = settings.initialSelected;
+                    let $option = $select.find(`option[value="${item.id}"]`);
+                    if ($option.length === 0) {
+                        // Yoksa ekle
+                        $option = $(`<option>`).val(item.id).text(item.name || item.title || item.id);
+                        $select.append($option);
+                    }
+                    $select.find('option').prop('selected', false);
+                    $option.prop('selected', true);
+                }
+                updateSelectedItems();
+            }
         });
     };
 

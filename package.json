@@ -1,6 +1,6 @@
 {
     "name": "io-select",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "description": "A modern and customizable select plugin for jQuery",
     "main": "dist/io-select.js",
     "scripts": {

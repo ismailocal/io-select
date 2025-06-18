@@ -143,6 +143,168 @@
                 <pre id="noSearchSelectOutput">null</pre>
             </div>
         </div>
+
+        <!-- AJAX Search Example -->
+        <div class="demo-section bg-white dark:bg-gray-800 shadow">
+            <h2 class="text-gray-900 dark:text-white">AJAX ile Dinamik Arama</h2>
+            <p class="mb-2 text-gray-700 dark:text-gray-300">Aşağıdaki select, arama kutusuna yazdıkça AJAX ile backend'den ürünleri getirir (örnek API: dummyjson.com/products/search).</p>
+            <div class="mb-4">
+                <select id="ajaxSelect" class="w-full"></select>
+            </div>
+            <div class="code-block dark:bg-gray-700 dark:text-gray-300">
+                <pre>$('#ajaxSelect').ioSelect({
+    placeholder: 'Ürün seçin',
+    searchPlaceholder: 'Ürün ara...',
+    noResultsText: 'Ürün bulunamadı',
+    ajax: {
+        url: 'https://dummyjson.com/products/search',
+        method: 'GET',
+        dataKey: 'products',
+        queryParam: 'q'
+    }
+});</pre>
+            </div>
+            <div class="output-json">
+                <strong>Seçili Ürün:</strong>
+                <pre id="ajaxSelectOutput">null</pre>
+            </div>
+        </div>
+
+        <!-- AJAX Multiple Example -->
+        <div class="demo-section bg-white dark:bg-gray-800 shadow">
+            <h2 class="text-gray-900 dark:text-white">AJAX ile Çoklu Seçim</h2>
+            <p class="mb-2 text-gray-700 dark:text-gray-300">Bu örnekte birden fazla ürün seçebilirsiniz. Arama kutusuna yazdıkça AJAX ile ürünler gelir.</p>
+            <div class="mb-4">
+                <select id="ajaxMultiSelect" multiple class="w-full"></select>
+            </div>
+            <div class="code-block dark:bg-gray-700 dark:text-gray-300">
+                <pre>$('#ajaxMultiSelect').ioSelect({
+    placeholder: 'Ürün(ler) seçin',
+    searchPlaceholder: 'Ürün ara...',
+    noResultsText: 'Ürün bulunamadı',
+    ajax: {
+        url: 'https://dummyjson.com/products/search',
+        method: 'GET',
+        dataKey: 'products',
+        queryParam: 'q'
+    }
+});</pre>
+            </div>
+            <div class="output-json">
+                <strong>Seçili Ürünler:</strong>
+                <pre id="ajaxMultiSelectOutput">[]</pre>
+            </div>
+        </div>
+
+        <!-- Initial Selected Example -->
+        <div class="demo-section bg-white dark:bg-gray-800 shadow">
+            <h2 class="text-gray-900 dark:text-white">Initial Selected Özelliği</h2>
+            <p class="mb-2 text-gray-700 dark:text-gray-300">Bu örnekte başlangıçta seçili değerler JavaScript ile ayarlanıyor.</p>
+            
+            <h3 class="text-lg font-semibold mb-2 text-gray-800 dark:text-gray-200">Single Select</h3>
+            <div class="mb-4">
+                <select id="initialSingleSelect" class="w-full">
+                    <option value=""></option>
+                    <option value="1">Istanbul</option>
+                    <option value="2">London</option>
+                    <option value="3">New York</option>
+                </select>
+            </div>
+            <div class="code-block dark:bg-gray-700 dark:text-gray-300">
+                <pre>$('#initialSingleSelect').ioSelect({
+    initialSelected: {
+        id: '2',
+        name: 'London'
+    }
+});</pre>
+            </div>
+            <div class="output-json">
+                <strong>Seçili Değer:</strong>
+                <pre id="initialSingleSelectOutput">null</pre>
+            </div>
+
+            <h3 class="text-lg font-semibold mb-2 mt-4 text-gray-800 dark:text-gray-200">Multiple Select</h3>
+            <div class="mb-4">
+                <select id="initialMultiSelect" multiple class="w-full">
+                    <option value="red">Red</option>
+                    <option value="blue">Blue</option>
+                    <option value="green">Green</option>
+                    <option value="yellow">Yellow</option>
+                </select>
+            </div>
+            <div class="code-block dark:bg-gray-700 dark:text-gray-300">
+                <pre>$('#initialMultiSelect').ioSelect({
+    initialSelected: [
+        { id: 'red', name: 'Red' },
+        { id: 'blue', name: 'Blue' }
+    ]
+});</pre>
+            </div>
+            <div class="output-json">
+                <strong>Seçili Değerler:</strong>
+                <pre id="initialMultiSelectOutput">[]</pre>
+            </div>
+        </div>
+
+        <!-- AJAX Initial Selected Example -->
+        <div class="demo-section bg-white dark:bg-gray-800 shadow">
+            <h2 class="text-gray-900 dark:text-white">AJAX ile Initial Selected</h2>
+            <p class="mb-2 text-gray-700 dark:text-gray-300">Bu örnekte AJAX ile çalışan select'te başlangıçta seçili değer ayarlanıyor. Ürün ID'si 1 olan "iPhone 9" başlangıçta seçili gelir.</p>
+            <div class="mb-4">
+                <select id="ajaxInitialSelect" class="w-full"></select>
+            </div>
+            <div class="code-block dark:bg-gray-700 dark:text-gray-300">
+                <pre>$('#ajaxInitialSelect').ioSelect({
+    placeholder: 'Ürün seçin',
+    searchPlaceholder: 'Ürün ara...',
+    noResultsText: 'Ürün bulunamadı',
+    ajax: {
+        url: 'https://dummyjson.com/products/search',
+        method: 'GET',
+        dataKey: 'products',
+        queryParam: 'q'
+    },
+    initialSelected: {
+        id: '1',
+        name: 'iPhone 9'
+    }
+});</pre>
+            </div>
+            <div class="output-json">
+                <strong>Seçili Ürün:</strong>
+                <pre id="ajaxInitialSelectOutput">null</pre>
+            </div>
+        </div>
+
+        <!-- AJAX Multiple Initial Selected Example -->
+        <div class="demo-section bg-white dark:bg-gray-800 shadow">
+            <h2 class="text-gray-900 dark:text-white">AJAX ile Multiple Initial Selected</h2>
+            <p class="mb-2 text-gray-700 dark:text-gray-300">Bu örnekte AJAX ile çalışan multiple select'te başlangıçta birden fazla ürün seçili geliyor. iPhone 9 ve Samsung Galaxy başlangıçta seçili.</p>
+            <div class="mb-4">
+                <select id="ajaxMultiInitialSelect" multiple class="w-full"></select>
+            </div>
+            <div class="code-block dark:bg-gray-700 dark:text-gray-300">
+                <pre>$('#ajaxMultiInitialSelect').ioSelect({
+    placeholder: 'Ürün(ler) seçin',
+    searchPlaceholder: 'Ürün ara...',
+    noResultsText: 'Ürün bulunamadı',
+    ajax: {
+        url: 'https://dummyjson.com/products/search',
+        method: 'GET',
+        dataKey: 'products',
+        queryParam: 'q'
+    },
+    initialSelected: [
+        { id: '1', name: 'iPhone 9' },
+        { id: '2', name: 'Samsung Galaxy' }
+    ]
+});</pre>
+            </div>
+            <div class="output-json">
+                <strong>Seçili Ürünler:</strong>
+                <pre id="ajaxMultiInitialSelectOutput">[]</pre>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -187,6 +349,93 @@
                 placeholder: 'Select month'
             }).on('change', function() {
                 updateOutput('#noSearchSelect', '#noSearchSelectOutput');
+            });
+
+            // AJAX example
+            $('#ajaxSelect').ioSelect({
+                placeholder: 'Ürün seçin',
+                searchPlaceholder: 'Ürün ara...',
+                noResultsText: 'Ürün bulunamadı',
+                ajax: {
+                    url: 'https://dummyjson.com/products/search',
+                    method: 'GET',
+                    dataKey: 'products',
+                    queryParam: 'q'
+                }
+            }).on('change', function() {
+                updateOutput('#ajaxSelect', '#ajaxSelectOutput');
+            });
+
+            // AJAX multiple example
+            $('#ajaxMultiSelect').ioSelect({
+                placeholder: 'Ürün(ler) seçin',
+                searchPlaceholder: 'Ürün ara...',
+                noResultsText: 'Ürün bulunamadı',
+                ajax: {
+                    url: 'https://dummyjson.com/products/search',
+                    method: 'GET',
+                    dataKey: 'products',
+                    queryParam: 'q'
+                }
+            }).on('change', function() {
+                updateOutput('#ajaxMultiSelect', '#ajaxMultiSelectOutput');
+            });
+
+            // Initial selected examples
+            $('#initialSingleSelect').ioSelect({
+                initialSelected: {
+                    id: '2',
+                    name: 'London'
+                }
+            }).on('change', function() {
+                updateOutput('#initialSingleSelect', '#initialSingleSelectOutput');
+            });
+
+            $('#initialMultiSelect').ioSelect({
+                initialSelected: [
+                    { id: 'red', name: 'Red' },
+                    { id: 'blue', name: 'Blue' }
+                ]
+            }).on('change', function() {
+                updateOutput('#initialMultiSelect', '#initialMultiSelectOutput');
+            });
+
+            // AJAX initial selected example
+            $('#ajaxInitialSelect').ioSelect({
+                placeholder: 'Ürün seçin',
+                searchPlaceholder: 'Ürün ara...',
+                noResultsText: 'Ürün bulunamadı',
+                ajax: {
+                    url: 'https://dummyjson.com/products/search',
+                    method: 'GET',
+                    dataKey: 'products',
+                    queryParam: 'q'
+                },
+                initialSelected: {
+                    id: '1',
+                    name: 'Essence Mascara Lash Princess'
+                }
+            }).on('change', function() {
+                updateOutput('#ajaxInitialSelect', '#ajaxInitialSelectOutput');
+            });
+
+            // AJAX multiple initial selected example
+            $('#ajaxMultiInitialSelect').ioSelect({
+                placeholder: 'Ürün(ler) seçin',
+                searchPlaceholder: 'Ürün ara...',
+                noResultsText: 'Ürün bulunamadı',
+                ajax: {
+                    url: 'https://dummyjson.com/products/search',
+                    method: 'GET',
+                    dataKey: 'products',
+                    queryParam: 'q'
+                },
+                initialSelected: [
+                    { id: '1', name: 'Essence Mascara Lash Princess' },
+                    { id: '132', name: 'Samsung Galaxy S8' }
+                ]
+            }).on('change', function() {
+                updateOutput('#ajaxMultiInitialSelect', '#ajaxMultiInitialSelectOutput');
             });
         });
     </script>
