@@ -6,13 +6,13 @@ A modern and customizable jQuery select plugin. Styled with Tailwind CSS, featur
 
 ## What's New (v1.0.3)
 
-- 🚀 **AJAX ile dinamik arama ve seçenek desteği**
-- 🏷️ **initialSelected**: Başlangıçta seçili değerleri JS ile belirleyebilme (single & multiple, AJAX destekli)
-- ⏳ **Debounce**: AJAX aramalarında gereksiz istekleri önleyen debounce
-- 📌 **Sticky Search**: Dropdown arama kutusu sticky
-- 🔄 **Loading/No Results UX**: AJAX sırasında "Yükleniyor..." ve sonuç yoksa "Ürün bulunamadı" mesajları
-- ❌ **Çarpı ile temizleme**: Single/multiple selectte seçimi kolayca temizleme
-- 🐞 **Birçok bugfix ve UX iyileştirmesi**
+- 🚀 **Dynamic search and option support with AJAX**
+- 🏷️ **initialSelected**: Set initially selected values via JS (single & multiple, AJAX supported)
+- ⏳ **Debounce**: Prevents unnecessary AJAX requests during search
+- 📌 **Sticky Search**: Sticky dropdown search box
+- 🔄 **Loading/No Results UX**: "Loading..." during AJAX and "No results found" messages
+- ❌ **Clear with X**: Easy selection clearing in single/multiple select
+- 🐞 **Multiple bugfixes and UX improvements**
 
 ## Demo
 
