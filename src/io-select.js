@@ -45,6 +45,9 @@ const IOSelect = (function () {
             placeholder: 'Make a selection',
             searchPlaceholder: 'Search...',
             noResultsText: 'No results found',
+            loadingText: 'Loading...',
+            onErrorText: 'Something went wrong!',
+            debounce: 300,
             searchable: true,
             ajax: null, // { url: '', method: 'GET', dataKey: 'results', queryParam: 'q' }
             initialSelected: null // { id: '', name: '' } veya [{ id: '', name: '' }]
@@ -145,7 +148,7 @@ const IOSelect = (function () {
                     $searchInput.on('keyup', debounce(function () {
                         const searchTerm = $(this).val().toLowerCase();
                         ajaxFetchOptions(searchTerm);
-                    }, 300));
+                    }, settings.debounce));
                 } else {
                     $searchInput.on('keyup', function () {
                         const searchTerm = $(this).val().toLowerCase();
@@ -272,7 +275,7 @@ const IOSelect = (function () {
                     // AJAX modunda filtreleme yapma, tüm allOptions'u göster
                     filteredOptions = allOptions;
                     if (isLoading) {
-                        const $loading = $('<li>').addClass('text-sm px-3 py-2 text-gray-500 dark:text-gray-400 cursor-default text-center').text('Yükleniyor...');
+                        const $loading = $('<li>').addClass('text-sm px-3 py-2 text-gray-500 dark:text-gray-400 cursor-default text-center').text(settings.loadingText);
                         $optionsList.append($loading);
                         return;
                     }
@@ -329,7 +332,7 @@ const IOSelect = (function () {
                     },
                     error: function () {
                         $optionsList.empty();
-                        const $error = $('<li>').addClass('text-sm px-3 py-2 text-red-500 cursor-default text-center').text('Bir hata oluştu');
+                        const $error = $('<li>').addClass('text-sm px-3 py-2 text-red-500 cursor-default text-center').text(settings.onErrorText);
                         $optionsList.append($error);
                         isLoading = false;
                     }
